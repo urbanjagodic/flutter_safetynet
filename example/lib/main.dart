@@ -3,6 +3,8 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_safetynet/flutter_safetynet.dart';
+import 'package:flutter_safetynet/data/harmful_app.dart';
+import 'package:flutter_safetynet/data/safetynet_exception.dart';
 
 void main() {
   runApp(MyApp());
@@ -14,7 +16,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  String _platformVersion = 'Unknown';
+  bool _platformVersion = false;
 
   @override
   void initState() {
@@ -24,13 +26,15 @@ class _MyAppState extends State<MyApp> {
 
   // Platform messages are asynchronous, so we initialize in an async method.
   Future<void> initPlatformState() async {
-    String platformVersion;
+    bool platformVersion = false;
     // Platform messages may fail, so we use a try/catch PlatformException.
+    List<HarmfulApp> apps;
     try {
-      platformVersion = await FlutterSafetynet.platformVersion;
-    } on PlatformException {
-      platformVersion = 'Failed to get platform version.';
+     await FlutterSafetynet.enableVerifyApps();
+    } on PlatformException catch(ex) {
+      //print(ex.message);
     }
+    print(apps);
 
     // If the widget was removed from the tree while the asynchronous platform
     // message was in flight, we want to discard the reply rather than calling
@@ -50,7 +54,7 @@ class _MyAppState extends State<MyApp> {
           title: const Text('Plugin example app'),
         ),
         body: Center(
-          child: Text('Running on: $_platformVersion\n'),
+          child: Text('IS verify apps enabled: $_platformVersion\n'),
         ),
       ),
     );
