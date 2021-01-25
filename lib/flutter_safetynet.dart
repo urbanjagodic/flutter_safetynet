@@ -76,7 +76,7 @@ class FlutterSafetynet {
     }
   }
 
-  static Future<String> verifyUrl(String url, {List<BrowsingThreatType> threats = const []}) async {
+  static Future<bool> verifyUrl(String url, {List<BrowsingThreatType> threats = const []}) async {
     List<int> threatTypes = threats.map((threat) => BrowsingThreat(threat).getType()).toList();
 
     try {
