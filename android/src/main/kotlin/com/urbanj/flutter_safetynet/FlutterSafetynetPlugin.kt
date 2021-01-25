@@ -1,7 +1,11 @@
 package com.urbanj.flutter_safetynet
 
 import android.content.Context
+import android.content.pm.PackageManager
+import android.content.pm.PackageManager.NameNotFoundException
 import androidx.annotation.NonNull
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.api.CommonStatusCodes
 import com.google.android.gms.safetynet.HarmfulAppsData
 import com.google.android.gms.safetynet.SafetyNet
 import com.google.android.gms.safetynet.SafetyNetClient
@@ -18,24 +22,28 @@ class FlutterSafetynetPlugin: FlutterPlugin, MethodCallHandler {
     private lateinit var context: Context
     private lateinit var safetyNetClient: SafetyNetClient
 
+    private lateinit var SAFEBROWSING_API_KEY : String
+
 
     override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         channel = MethodChannel(flutterPluginBinding.binaryMessenger, "flutter_safetynet")
         channel.setMethodCallHandler(this)
         context = flutterPluginBinding.applicationContext
         safetyNetClient = SafetyNet.getClient(context)
+        SAFEBROWSING_API_KEY = getMetaData(context, "safebrowsing_api_key")!!
     }
 
     override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
         when (call.method) {
-            PluginActions.IS_VERIFY_APPS_ENABLED.name -> {
-              isVerifyAppsEnabled(result)
-            }
-            PluginActions.ENABLE_VERIFY_APPS.name -> {
-              enableVerifyApps(result)
-            }
-            PluginActions.LIST_HARMFUL_APPS.name -> {
-                listHarmfulApps(result)
+            PluginActions.IS_VERIFY_APPS_ENABLED.name -> isVerifyAppsEnabled(result)
+            PluginActions.ENABLE_VERIFY_APPS.name -> enableVerifyApps(result)
+            PluginActions.LIST_HARMFUL_APPS.name -> listHarmfulApps(result)
+            PluginActions.INIT_SAFE_BROWSING.name -> initSafeBrowsing(result)
+            PluginActions.SHUT_DOWN_SAFE_BROWSING.name -> shutdownSafeBrowsing(result)
+            PluginActions.VERIFY_URL.name -> {
+                var url: String = call.argument<String>("url")!!
+                var threats: List<Int> = call.argument<List<Int>>("threats")!!
+                verifyUrl(result, url, threats)
             }
             else -> {
               result.notImplemented()
@@ -93,10 +101,59 @@ class FlutterSafetynetPlugin: FlutterPlugin, MethodCallHandler {
                     }
                 }
     }
+
+    private fun initSafeBrowsing(result: Result) {
+        safetyNetClient
+                .initSafeBrowsing()
+                .addOnCompleteListener { task ->
+                    if (!task.isSuccessful) {
+                        result.error("init_safe_browsing_error", "Couldn't init safe browsing.", null)
+                    }
+                }
+    }
+
+    private fun shutdownSafeBrowsing(result: Result) {
+        safetyNetClient
+                .shutdownSafeBrowsing()
+                .addOnCompleteListener { task ->
+                    if (!task.isSuccessful) {
+                        result.error("shut_down_safe_browsing_error", "Couldn't shut down safe browsing.", null)
+                    }
+                }
+    }
+
+    private fun verifyUrl(result: Result, url: String, threats: List<Int>) {
+        safetyNetClient
+                .lookupUri(url, SAFEBROWSING_API_KEY, *threats.toIntArray())
+                .addOnSuccessListener { task ->
+                    result.success(task.detectedThreats!!.isEmpty())
+                }
+                .addOnFailureListener { ex ->
+                    if (ex is ApiException) {
+                        var status = CommonStatusCodes.getStatusCodeString(ex.statusCode)
+                        result.error("verify_url_error", "$status : ${ex.message}", null)
+                    } else {
+                        result.error("verify_url_error", "Unknown error while verifying url.", null)
+                    }
+                }
+    }
+
+
+    private fun getMetaData(context: Context, name: String?): String? {
+        try {
+            val appInfo = context.packageManager.getApplicationInfo(context.packageName, PackageManager.GET_META_DATA)
+            return appInfo.metaData.getString(name)
+        } catch (e: NameNotFoundException) {
+        }
+        return null
+    }
 }
 
 private enum class PluginActions {
     IS_VERIFY_APPS_ENABLED,
     ENABLE_VERIFY_APPS,
-    LIST_HARMFUL_APPS
+    LIST_HARMFUL_APPS,
+    INIT_SAFE_BROWSING,
+    SHUT_DOWN_SAFE_BROWSING,
+    VERIFY_URL
 }

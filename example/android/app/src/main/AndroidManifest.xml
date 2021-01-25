@@ -9,6 +9,10 @@
         android:name="io.flutter.app.FlutterApplication"
         android:label="flutter_safetynet_example"
         android:icon="@mipmap/ic_launcher">
+        <meta-data
+            android:name="safebrowsing_api_key"
+            android:value="YOUR_API_KEY"
+            />
         <activity
             android:name=".MainActivity"
             android:launchMode="singleTop"

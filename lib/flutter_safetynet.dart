@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/services.dart';
+import 'data/browsing_threat_type.dart';
 import 'data/harmful_app.dart';
 import 'data/plugin_values.dart';
 import 'data/safetynet_exception.dart';
@@ -57,5 +58,32 @@ class FlutterSafetynet {
       throw SafetynetException(ex.code, ex.message);
     }
     return harmFulApps;
+  }
+
+  static Future<void> initSafeBrowsing() async {
+    try {
+      await _channel.invokeMethod(Util.parseActionName(MethodAction.INIT_SAFE_BROWSING));
+    } on PlatformException catch(ex) {
+      throw SafetynetException(ex.code, ex.message);
+    }
+  }
+
+  static Future<void> shutDownSafeBrowsing() async {
+    try {
+      await _channel.invokeMethod(Util.parseActionName(MethodAction.SHUT_DOWN_SAFE_BROWSING));
+    } on PlatformException catch(ex) {
+      throw SafetynetException(ex.code, ex.message);
+    }
+  }
+
+  static Future<String> verifyUrl(String url, {List<BrowsingThreatType> threats = const []}) async {
+    List<int> threatTypes = threats.map((threat) => BrowsingThreat(threat).getType()).toList();
+
+    try {
+      return await _channel.invokeMethod(Util.parseActionName(MethodAction.VERIFY_URL),
+          {'url' : url, 'threats' : threatTypes});
+    } on PlatformException catch(ex) {
+      throw SafetynetException(ex.code, ex.message);
+    }
   }
 }
