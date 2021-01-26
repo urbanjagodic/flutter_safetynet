@@ -13,6 +13,10 @@
             android:name="safebrowsing_api_key"
             android:value="YOUR_API_KEY"
             />
+        <meta-data
+            android:name="recaptcha_api_key"
+            android:value="YOUR_RECAPTCHA_SITE_API_KEY"
+            />
         <activity
             android:name=".MainActivity"
             android:launchMode="singleTop"

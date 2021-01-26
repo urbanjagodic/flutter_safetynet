@@ -23,6 +23,7 @@ class FlutterSafetynetPlugin: FlutterPlugin, MethodCallHandler {
     private lateinit var safetyNetClient: SafetyNetClient
 
     private lateinit var SAFEBROWSING_API_KEY : String
+    private lateinit var RECAPTCHA_SITE_API_KEY : String
 
 
     override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
@@ -31,6 +32,7 @@ class FlutterSafetynetPlugin: FlutterPlugin, MethodCallHandler {
         context = flutterPluginBinding.applicationContext
         safetyNetClient = SafetyNet.getClient(context)
         SAFEBROWSING_API_KEY = getMetaData(context, "safebrowsing_api_key")!!
+        RECAPTCHA_SITE_API_KEY = getMetaData(context, "recaptcha_api_key")!!
     }
 
     override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
@@ -45,6 +47,7 @@ class FlutterSafetynetPlugin: FlutterPlugin, MethodCallHandler {
                 var threats: List<Int> = call.argument<List<Int>>("threats")!!
                 verifyUrl(result, url, threats)
             }
+            PluginActions.VERIFY_RECAPTCHA.name -> verifyRecaptcha(result)
             else -> {
               result.notImplemented()
             }
@@ -130,12 +133,40 @@ class FlutterSafetynetPlugin: FlutterPlugin, MethodCallHandler {
                 }
                 .addOnFailureListener { ex ->
                     if (ex is ApiException) {
-                        var status = CommonStatusCodes.getStatusCodeString(ex.statusCode)
+                        val status = CommonStatusCodes.getStatusCodeString(ex.statusCode)
                         result.error("verify_url_error", "$status : ${ex.message}", null)
                     } else {
                         result.error("verify_url_error", "Unknown error while verifying url.", null)
                     }
                 }
+    }
+
+    private fun verifyRecaptcha(result : Result) {
+        safetyNetClient
+                .verifyWithRecaptcha(RECAPTCHA_SITE_API_KEY)
+                .addOnSuccessListener { response ->
+                    val userResponseToken = response.tokenResult!!
+                    if (userResponseToken.isNotEmpty()) {
+                        result.success(response.tokenResult!!)
+                        // Validate the user response token using the
+                        // reCAPTCHA siteverify API.
+                        verifyRecaptchaTokenResponse(userResponseToken)
+                    } else {
+                        result.error("verify_recaptcha_error", "Response recaptcha user token was null", null)
+                    }
+                }
+                .addOnFailureListener{ ex ->
+                    if (ex is ApiException) {
+                        val status = CommonStatusCodes.getStatusCodeString(ex.statusCode)
+                        result.error("verify_recaptcha_error", "$status : ${ex.message}", null)
+                    } else {
+                        result.error("verify_recaptcha_error", "Uknown verify recaptcha error", null)
+                    }
+                }
+    }
+
+    private fun verifyRecaptchaTokenResponse(token : String) {
+
     }
 
 
@@ -155,5 +186,6 @@ private enum class PluginActions {
     LIST_HARMFUL_APPS,
     INIT_SAFE_BROWSING,
     SHUT_DOWN_SAFE_BROWSING,
-    VERIFY_URL
+    VERIFY_URL,
+    VERIFY_RECAPTCHA
 }

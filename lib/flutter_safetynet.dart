@@ -86,4 +86,12 @@ class FlutterSafetynet {
       throw SafetynetException(ex.code, ex.message);
     }
   }
+
+  static Future<String> verifyRecaptcha() async {
+    try {
+      return await _channel.invokeMethod(Util.parseActionName(MethodAction.VERIFY_RECAPTCHA));
+    } on PlatformException catch(ex) {
+      throw SafetynetException(ex.code, ex.message);
+    }
+  }
 }
