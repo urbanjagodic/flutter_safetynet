@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_safetynet/data/captcha_response.dart';
 import 'data/browsing_threat_type.dart';
 import 'data/harmful_app.dart';
 import 'data/plugin_values.dart';
@@ -87,9 +90,16 @@ class FlutterSafetynet {
     }
   }
 
-  static Future<String> verifyRecaptcha() async {
+  static Future<CaptchaResponse> verifyRecaptcha({@required String apiEndpoint}) async {
     try {
-      return await _channel.invokeMethod(Util.parseActionName(MethodAction.VERIFY_RECAPTCHA));
+      String apiResponse = await _channel.invokeMethod(Util.parseActionName(MethodAction.VERIFY_RECAPTCHA),
+          { 'apiEndpoint' : apiEndpoint});
+      try {
+        return CaptchaResponse.fromJson(jsonDecode(apiResponse));
+      } catch(ex) {
+        throw SafetynetException("Parse captcha response error",
+            "Couldn't parse captcha response: $ex");
+      }
     } on PlatformException catch(ex) {
       throw SafetynetException(ex.code, ex.message);
     }

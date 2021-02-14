@@ -9,12 +9,22 @@ import com.google.android.gms.common.api.CommonStatusCodes
 import com.google.android.gms.safetynet.HarmfulAppsData
 import com.google.android.gms.safetynet.SafetyNet
 import com.google.android.gms.safetynet.SafetyNetClient
+import com.google.gson.Gson
+import com.urbanj.flutter_safetynet.data.RecaptchaRequest
+import com.urbanj.flutter_safetynet.data.RecaptchaResponse
+import com.urbanj.flutter_safetynet.data.RecaptchaService
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
+import retrofit2.Retrofit
+import retrofit2.converter.moshi.MoshiConverterFactory
+import java.io.IOException
 
 class FlutterSafetynetPlugin: FlutterPlugin, MethodCallHandler {
 
@@ -31,8 +41,8 @@ class FlutterSafetynetPlugin: FlutterPlugin, MethodCallHandler {
         channel.setMethodCallHandler(this)
         context = flutterPluginBinding.applicationContext
         safetyNetClient = SafetyNet.getClient(context)
-        SAFEBROWSING_API_KEY = getMetaData(context, "safebrowsing_api_key")!!
-        RECAPTCHA_SITE_API_KEY = getMetaData(context, "recaptcha_api_key")!!
+        SAFEBROWSING_API_KEY = getApiKey(context, "safebrowsing_api_key")!!
+        RECAPTCHA_SITE_API_KEY = getApiKey(context, "recaptcha_api_key")!!
     }
 
     override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
@@ -47,7 +57,10 @@ class FlutterSafetynetPlugin: FlutterPlugin, MethodCallHandler {
                 var threats: List<Int> = call.argument<List<Int>>("threats")!!
                 verifyUrl(result, url, threats)
             }
-            PluginActions.VERIFY_RECAPTCHA.name -> verifyRecaptcha(result)
+            PluginActions.VERIFY_RECAPTCHA.name -> {
+                var apiEndpoint: String = call.argument<String>("apiEndpoint")!!
+                verifyRecaptcha(apiEndpoint, result)
+            }
             else -> {
               result.notImplemented()
             }
@@ -141,16 +154,14 @@ class FlutterSafetynetPlugin: FlutterPlugin, MethodCallHandler {
                 }
     }
 
-    private fun verifyRecaptcha(result : Result) {
+    private fun verifyRecaptcha(apiEndpoint : String, result : Result) {
         safetyNetClient
                 .verifyWithRecaptcha(RECAPTCHA_SITE_API_KEY)
                 .addOnSuccessListener { response ->
                     val userResponseToken = response.tokenResult!!
                     if (userResponseToken.isNotEmpty()) {
-                        result.success(response.tokenResult!!)
-                        // Validate the user response token using the
-                        // reCAPTCHA siteverify API.
-                        verifyRecaptchaTokenResponse(userResponseToken)
+                        // Validate the user response token on your backend server
+                        verifyRecaptchaTokenResponse(apiEndpoint, userResponseToken, result)
                     } else {
                         result.error("verify_recaptcha_error", "Response recaptcha user token was null", null)
                     }
@@ -165,12 +176,32 @@ class FlutterSafetynetPlugin: FlutterPlugin, MethodCallHandler {
                 }
     }
 
-    private fun verifyRecaptchaTokenResponse(token : String) {
+    private fun verifyRecaptchaTokenResponse(apiEndpoint: String, userToken : String, result: Result) {
+        val client: Retrofit = Retrofit.Builder()
+                .baseUrl(apiEndpoint)
+                .addConverterFactory(MoshiConverterFactory.create())
+                .build()
+        val service = client.create(RecaptchaService::class.java)
+        var response = service.verifyRecaptcha(RecaptchaRequest(userToken))
 
+        response.enqueue(object : Callback<RecaptchaResponse> {
+            override fun onResponse(call: Call<RecaptchaResponse>, response: Response<RecaptchaResponse>) {
+                if (response.code() == 200) {
+                    val body = Gson().toJson(response.body()!!)
+                    result.success(body)
+                } else {
+                    result.error("verify_recaptcha_error",
+                            "Network error ${response.code()} message: ${response.message()}", null)
+                }
+            }
+            override fun onFailure(call: Call<RecaptchaResponse>, t: Throwable) {
+                result.error("verify_recaptcha_error", "${t.message} : ${t.cause}", null)
+            }
+        })
     }
 
 
-    private fun getMetaData(context: Context, name: String?): String? {
+    private fun getApiKey(context: Context, name: String?): String? {
         try {
             val appInfo = context.packageManager.getApplicationInfo(context.packageName, PackageManager.GET_META_DATA)
             return appInfo.metaData.getString(name)
